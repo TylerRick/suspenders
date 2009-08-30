@@ -4,18 +4,41 @@ require 'rubygems'
 require 'activesupport'
 require 'pathname'
 require 'digest/md5'
+require 'optparse'
+
+ARGV.options do |opts|
+  opts.on("-v", "--verbose", "Show the output from all commands.")                                                                                         { ENV['SUSPENDERS_VERBOSE'] = 'true' }
+  opts.on("-q", "--quiet", "Suppress the output from all commands unless its exit code indicates failure.")                                                { ENV['SUSPENDERS_QUIET'] = 'true' }
+  opts.on("-b", "--base-dir=", String, "Specify a different base directory for projects.")                                                                 { |v| ENV['SUSPENDERS_BASE_DIR'] = v }
+  opts.on("-t", "--template=", String, "Specify a different git URL to use (clone) as the template (for example, a file:// URL to make cloning quicker).") { |v| ENV['SUSPENDERS_TEMPLATE_URL'] = v }
+  opts.on("-u", "--user=", String, "Specify a different username for your database (default is root).")                                                    { |v| ENV['SUSPENDERS_USER'] = v }
+  opts.on("-p", "--password=", String, "Specify a different password for your database (default is none).")                                                { |v| ENV['SUSPENDERS_PASSWORD'] = v }
+  opts.parse!
+end
 
 project_name = ARGV[0]
+if project_name =~ %r(/) # If name contains /'s, it must be a path
+  project_directory, project_name = project_name, File.basename(project_name)
+end
+
 fail("Usage:  #{File.basename(__FILE__)} new_project_name")     unless project_name
 fail("Project name must only contain [a-z0-9_]")                unless project_name =~ /^[a-z0-9_]+$/
 
-base_directory = Pathname.new(File.join(File.dirname(__FILE__), '..', '..')).realpath
-project_directory = base_directory + project_name
+if project_directory.nil?
+  base_directory = Pathname.new(ENV['SUSPENDERS_BASE_DIR'] || File.join(File.dirname(__FILE__), '..', '..')).realpath
+  project_directory = base_directory + project_name
+else
+  project_directory = Pathname.new(project_directory)
+end
 fail("Project directory (#{project_directory}) already exists") if project_directory.exist?
 
-template_url = "git://github.com/thoughtbot/suspenders.git"
+template_url = ENV['SUSPENDERS_TEMPLATE_URL'] || "git://github.com/thoughtbot/suspenders.git"
 changeme = "CHANGEME"
 changesession = "CHANGESESSION"
+
+def verbose?
+  (ENV['SUSPENDERS_VERBOSE'] == 'true') && !(ENV['SUSPENDERS_VERBOSE'] == 'true')
+end
 
 def run(cmd)
   puts "Running '#{cmd}'"
@@ -23,7 +46,7 @@ def run(cmd)
   if $? != 0 
     fail "Command #{cmd} failed: #$?\n#{out}" 
   end
-  out
+  puts out if verbose?
 end
 
 def search_and_replace(file, search, replace)
@@ -42,19 +65,25 @@ def installed?(gem_name)
   installed_gems.any?
 end
 
-run("mkdir #{project_directory}")
+run("mkdir -p #{project_directory}")
+puts "Changing to directory #{project_directory}"
 Dir.chdir(project_directory) or fail("Couldn't change to #{project_directory}")
 run("git init")
 run("git remote add suspenders #{template_url}")
 run("git pull suspenders master")
 
-Dir.glob("#{project_directory}/**/*").each do |file|
+Dir.glob("./**/*").each do |file|
   search_and_replace(file, changeme, project_name)
 end
 
-Dir.glob("#{project_directory}/**/session_store.rb").each do |file|
+Dir.glob("./**/session_store.rb").each do |file|
   datestring = Time.now.strftime("%j %U %w %A %B %d %Y %I %M %S %p %Z")
   search_and_replace(file, changesession, Digest::MD5.hexdigest("#{project_name} #{datestring}"))
+end
+
+Dir.glob("./config/database.yml").each do |file|
+  search_and_replace(file, '{USER}',     ENV['SUSPENDERS_USER'] || 'root')
+  search_and_replace(file, '{PASSWORD}', ENV['SUSPENDERS_PASSWORD'] || '')
 end
 
 run("git commit -a -m 'Initial commit'")
@@ -76,6 +105,6 @@ run("script/generate clearance_views -f")
 run("git add .")
 run("git commit -m 'installed clearance'")
 
+puts "Your new app is available at #{project_directory}"
 puts
-puts "Now login to github and add a new project named '#{project_name.humanize.titleize}'"
-
+puts "Now log in to github and add a new project named '#{project_name.humanize.titleize}'"

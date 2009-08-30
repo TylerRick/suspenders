@@ -3,16 +3,16 @@
 development:
   adapter: mysql
   database: CHANGEME_development
-  username: root
-  password: 
+  username: {USER}
+  password: {PASSWORD}
   host: localhost
   encoding: utf8
   
 test: &TEST
   adapter: mysql
   database: CHANGEME_test
-  username: root
-  password: 
+  username: {USER}
+  password: {PASSWORD}
   host: localhost
   encoding: utf8
   
