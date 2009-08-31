@@ -37,7 +37,7 @@ changeme = "CHANGEME"
 changesession = "CHANGESESSION"
 
 def verbose?
-  (ENV['SUSPENDERS_VERBOSE'] == 'true') && !(ENV['SUSPENDERS_VERBOSE'] == 'true')
+  (ENV['SUSPENDERS_VERBOSE'] == 'true') && !(ENV['SUSPENDERS_QUIET'] == 'true')
 end
 
 def run(cmd)
